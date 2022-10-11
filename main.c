@@ -2,25 +2,21 @@
 #include <stdlib.h>
 #include <ncurses.h>
 #include <string.h>
-
+#include  <time.h>
+#include <unistd.h>
 #include "signature.h"
+#include "common.h"
+#include "player.h"
+#include "beast.h"
+#include <semaphore.h>
+#include <pthread.h>
 
-#define MAP_HEIGHT 32
-#define MAP_WIDTH 64
-#define BORDERS_THICK 3
 
-#define PANEL_HEIGHT 32
-#define PANEL_WIDTH 64
+sem_t beastSemaphore;
+unsigned int roundCounter = 0;
 
-#define BACKGROUND 1
-#define PANEL 2
-
-struct player_t{
-    int x;
-    int y;
-};
-
-void generateBorders(char* map)
+char map[MAP_WIDTH*MAP_HEIGHT+1] = {0};
+void generateBorders()
 {
     attron(COLOR_PAIR(BACKGROUND));
 
@@ -53,9 +49,9 @@ void generatePanel()
     //printing serer and game info
     mvprintw(0,MAP_WIDTH+1,"Server's PID: %d",1337);
     mvprintw(1,MAP_WIDTH+1,"SCampsite X/Y: %d/%d",1,10);
-    mvprintw(2,MAP_WIDTH+1,"Round number: %d",1337);
+    mvprintw(2,MAP_WIDTH+1,"Round number: %d",roundCounter);
 
-    //printing players info
+    //printing players infos
     mvprintw(4,MAP_WIDTH+1,"Parameter:   Player1  Player2  Player3  Player4 ");
     mvprintw(5,MAP_WIDTH+1,"PID         1390     1420     1900     -");
     mvprintw(6,MAP_WIDTH+1,"Type        CPU      CPU      HUMAN    -");
@@ -93,9 +89,9 @@ void generateFooter()
     mvprintw(57,35,tab7);
     mvprintw(58,35,tab8);
 }
-void loadMap(char* map)
+void loadMap()
 {
-    FILE* fp = fopen("assets/map3.txt","r");
+    FILE* fp = fopen("assets/map1.txt","r");
     if(!fp)
     {
         mvprintw(0,0,"ERRROR");
@@ -116,26 +112,84 @@ void loadMap(char* map)
     }
     fclose(fp);
 }
+void initBeast(struct beast_t* beast)
+{
+    do
+    {
+        beast->y = rand() % 24 + 3;
+        beast->x = rand() % 40 + 3;
+    } while (mvinch(beast->y,beast->x) != ' ');
+    mvaddch(beast->y,beast->x,'*');
+}
 
+void* moveBeast(void* args)
+{
+    struct beast_t* beast = (struct beast_t*)args;
+    while(1)
+    {
+        int move = rand() % 4;
+        if(move == 0)
+        {
+            if((char)mvinch(beast->y+1,beast->x) != '^')
+            {
+                beast->y++;
+                sem_wait(&beastSemaphore);
+            }
+        }
+        else if(move == 1)
+        {
+            if((char)mvinch(beast->y-1,beast->x) != '^')
+            {
+                beast->y--;
+                sem_wait(&beastSemaphore);
+            }
+        }
+        else if(move == 2)
+        {
+            if((char)mvinch(beast->y,beast->x+1) != '^')
+            {
+                beast->x++;
+                sem_wait(&beastSemaphore);
+            }
+        }
+        else if(move == 3)
+        {
+            if((char)mvinch(beast->y,beast->x-1) != '^')
+            {
+                beast->x--;
+                sem_wait(&beastSemaphore);
+            }
+        }
+        else sem_wait(&beastSemaphore);
+
+    }
+}
+
+void drawBeast(struct beast_t* beast)
+{
+    mvaddch(beast->y,beast->x,'*');
+}
 int main()
 {
-    char map[MAP_WIDTH*MAP_HEIGHT+1] = {0};
-
-    loadMap(map);
+    sem_init(&beastSemaphore,0,1);
+    srand(time(NULL));
+    loadMap();
     initscr();
     noecho();
     start_color();
     init_pair(BACKGROUND,COLOR_RED,COLOR_RED);
     init_pair(PANEL,COLOR_BLACK,COLOR_YELLOW);
-    struct player_t player1;
-    player1.x = 0 + BORDERS_THICK;
-    player1.y = 0 + BORDERS_THICK;
-    updatePlayer(&player1);
-    generateBorders(map);
+    struct player_t* player1 = calloc(1,sizeof(struct player_t));
+    player1->x = 0 + BORDERS_THICK;
+    player1->y = 0 + BORDERS_THICK;
+    updatePlayer(player1);
+    generateBorders();
     generatePanel();
     generateFooter();
-
-
+    struct beast_t bestia;
+    initBeast(&bestia);
+    pthread_t beastThread;
+    pthread_create(&beastThread,NULL,&moveBeast,&bestia);
     while(1)
     {
         char ruch = getch();
@@ -143,29 +197,32 @@ int main()
         switch(ruch)
         {
             case 'w':
-                if((char)mvinch(player1.y-1,player1.x) != '^')
-                    player1.y -= 1;
+                if((char)mvinch(player1->y-1,player1->x) != '^')
+                    player1->y -= 1;
                 break;
             case 's':
-                if((char)mvinch(player1.y+1,player1.x) != '^')
-                    player1.y += 1;
+                if((char)mvinch(player1->y+1,player1->x) != '^')
+                    player1->y += 1;
                 break;
             case 'a':
-                if((char)mvinch(player1.y,player1.x - 1) != '^')
-                    player1.x -= 1;
+                if((char)mvinch(player1->y,player1->x - 1) != '^')
+                    player1->x -= 1;
                 break;
             case 'd':
-                if((char)mvinch(player1.y,player1.x + 1) != '^')
-                player1.x += 1;
+                if((char)mvinch(player1->y,player1->x + 1) != '^')
+                player1->x += 1;
                 break;
         }
+        roundCounter++;
         clear();
         generateBorders(map);
         generateFooter();
         generatePanel();
-        updatePlayer(&player1);
-        refresh();
+        updatePlayer(player1);
+        drawBeast(&bestia);
+        sem_post(&beastSemaphore);
     }
+    sem_destroy(&beastSemaphore);
     endwin();
     return EXIT_SUCCESS;
 }
