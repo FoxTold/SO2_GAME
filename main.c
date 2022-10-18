@@ -10,29 +10,55 @@
 #include "beast.h"
 #include <semaphore.h>
 #include <pthread.h>
+#include "headers.h"
+#define numberOfBeasts 5
 
 
-sem_t beastSemaphore;
+unsigned int playersCount = 0;
 unsigned int roundCounter = 0;
+unsigned int amoutOfCoins = 0;
+pthread_t beastThreads[numberOfBeasts];
 
 char map[MAP_WIDTH*MAP_HEIGHT+1] = {0};
+void initBeasts(struct beast_t* beasts) 
+{
+    for(int i=0;i<numberOfBeasts;i++)
+    {
+        initBeast(&beasts[i]);
+        drawBeast(&beasts[i]);
+        pthread_create(&beastThreads[i],NULL,&moveBeast,&beasts[i]);
+    }
+}
+void drawBeasts(struct beast_t* beasts)
+{
+    for(int i=0;i<numberOfBeasts;i++)
+    {
+        drawBeast(&beasts[i]);
+    }
+}
 void generateBorders()
 {
-    attron(COLOR_PAIR(BACKGROUND));
-
     for(int i=0;i<MAP_HEIGHT;i++)
     {
         for(int j=0;j<MAP_WIDTH;j++)
         {
             if(*(map + i*MAP_WIDTH + j)== '^')
             {
+                attron(COLOR_PAIR(BACKGROUND));
                 mvaddch(i,j,'^');
+                attroff(COLOR_PAIR(BACKGROUND));
+            }
+            else if ( *(map + i*MAP_WIDTH + j)== '#')
+            {
+                attron(COLOR_PAIR(PANEL));
+                mvaddch(i,j,'#');
+                attroff(COLOR_PAIR(PANEL));
             }
         }
     }
     attroff(COLOR_PAIR(BACKGROUND));
 }
-void updatePlayer(struct player_t* player)
+void drawPlayer(struct player_t* player)
 {
     mvaddch(player->y,player->x,'&');
 }
@@ -114,6 +140,8 @@ void loadMap()
 }
 void initBeast(struct beast_t* beast)
 {
+    sem_init(&beast->semaphore,0,1);
+    
     do
     {
         beast->y = rand() % 24 + 3;
@@ -121,7 +149,74 @@ void initBeast(struct beast_t* beast)
     } while (mvinch(beast->y,beast->x) != ' ');
     mvaddch(beast->y,beast->x,'*');
 }
+void* playerRoutine(void* args)
+{
+    struct player_t* player1 = (struct player_t* ) args;
+    while(1)
+    {
+        char ruch = getch();
+        fflush(stdin);
 
+        if(player1->canMove == 0)
+        {
+            player1->canMove=1;
+            ruch = 'l';
+        }
+        switch(ruch)
+        {
+            case 'w':
+                if(map[(player1->y-1)*MAP_WIDTH + player1->x] != '^')
+                {
+                if(map[(player1->y-1)*MAP_WIDTH + player1->x] == '#')
+                    {
+                        player1->canMove = 0;
+                    }
+                    player1->y -= 1;
+                    break;
+                }
+                break;
+
+                
+            case 's':
+                if(map[(player1->y+1)*MAP_WIDTH + player1->x] != '^')
+                {
+                if(map[(player1->y+1)*MAP_WIDTH + player1->x] == '#')
+                    {
+                        player1->canMove = 0;
+                    }
+                
+                    player1->y += 1;
+                    break;
+                }
+                break;
+
+            case 'a':
+                if(map[(player1->y)*MAP_WIDTH + player1->x-1] != '^')
+                {
+                if(map[(player1->y)*MAP_WIDTH + player1->x-1] == '#')
+                    {
+                        player1->canMove = 0;
+                    }
+                    player1->x -= 1;
+                    break;
+                }
+                break;
+            case 'd':
+                if(map[(player1->y)*MAP_WIDTH + player1->x+1] != '^')
+                {
+                if(map[(player1->y)*MAP_WIDTH + player1->x+1] == '#')
+                    {
+                        player1->canMove = 0;
+                    }
+                    player1->x += 1;
+                    break;
+                }
+                break;
+
+        }
+        sem_wait(&player1->semaphore);
+    }
+}
 void* moveBeast(void* args)
 {
     struct beast_t* beast = (struct beast_t*)args;
@@ -130,48 +225,73 @@ void* moveBeast(void* args)
         int move = rand() % 4;
         if(move == 0)
         {
-            if((char)mvinch(beast->y+1,beast->x) != '^')
+            if(map[(beast->y+1)*MAP_WIDTH + beast->x] != '^')
             {
                 beast->y++;
-                sem_wait(&beastSemaphore);
             }
+            else continue;
+
         }
         else if(move == 1)
         {
-            if((char)mvinch(beast->y-1,beast->x) != '^')
+            if(map[(beast->y-1)*MAP_WIDTH + beast->x] != '^')
             {
                 beast->y--;
-                sem_wait(&beastSemaphore);
             }
+            else continue;
+
         }
         else if(move == 2)
         {
-            if((char)mvinch(beast->y,beast->x+1) != '^')
+            if(map[(beast->y)*MAP_WIDTH + beast->x+1] != '^')
             {
                 beast->x++;
-                sem_wait(&beastSemaphore);
             }
+            else continue;
+
         }
         else if(move == 3)
         {
-            if((char)mvinch(beast->y,beast->x-1) != '^')
+            if(map[(beast->y)*MAP_WIDTH + beast->x-1] != '^')
             {
                 beast->x--;
-                sem_wait(&beastSemaphore);
             }
+            else continue;
         }
-        else sem_wait(&beastSemaphore);
-
+        
+        sem_wait(&beast->semaphore);
     }
 }
-
 void drawBeast(struct beast_t* beast)
 {
     mvaddch(beast->y,beast->x,'*');
 }
+void checkIfAnyOfPlayersIsDead(struct player_t* players, struct beast_t* beasts)
+{
+    for(int playerIterator = 0;playerIterator<playersCount;playerIterator++)
+    {
+        for(int beastsIterator = 0;beastsIterator<numberOfBeasts;beastsIterator++)
+        {
+            if(players[playerIterator].x == beasts[beastsIterator].x && players[playerIterator].y == beasts[beastsIterator].y)
+            {
+                killPlayer(&players[playerIterator]);
+            }
+        }
+    }
+}
+void killPlayer(struct player_t* player)
+{
+    mvprintw(0,0,"KILLED");
+    player->x = player->startX;
+    player->y = player->startY;
+}
+
 int main()
 {
-    sem_init(&beastSemaphore,0,1);
+    struct beast_t beasts[numberOfBeasts];
+    
+
+    pthread_t playerThread;
     srand(time(NULL));
     loadMap();
     initscr();
@@ -182,47 +302,38 @@ int main()
     struct player_t* player1 = calloc(1,sizeof(struct player_t));
     player1->x = 0 + BORDERS_THICK;
     player1->y = 0 + BORDERS_THICK;
-    updatePlayer(player1);
+    player1->canMove = 1;
+    player1->startX = player1->x;
+    player1->startY = player1->y;
+    sem_init(&player1->semaphore,0,1);
+    initBeasts(beasts);
+    drawPlayer(player1);
     generateBorders();
     generatePanel();
     generateFooter();
-    struct beast_t bestia;
-    initBeast(&bestia);
-    pthread_t beastThread;
-    pthread_create(&beastThread,NULL,&moveBeast,&bestia);
+    playersCount = 1;
+    pthread_create(&playerThread,NULL,&playerRoutine,player1);
     while(1)
     {
-        char ruch = getch();
-        if(ruch == 'z') break;
-        switch(ruch)
-        {
-            case 'w':
-                if((char)mvinch(player1->y-1,player1->x) != '^')
-                    player1->y -= 1;
-                break;
-            case 's':
-                if((char)mvinch(player1->y+1,player1->x) != '^')
-                    player1->y += 1;
-                break;
-            case 'a':
-                if((char)mvinch(player1->y,player1->x - 1) != '^')
-                    player1->x -= 1;
-                break;
-            case 'd':
-                if((char)mvinch(player1->y,player1->x + 1) != '^')
-                player1->x += 1;
-                break;
-        }
-        roundCounter++;
         clear();
         generateBorders(map);
         generateFooter();
         generatePanel();
-        updatePlayer(player1);
-        drawBeast(&bestia);
-        sem_post(&beastSemaphore);
+        drawPlayer(player1);
+        drawBeasts(beasts);
+        checkIfAnyOfPlayersIsDead(player1,beasts);
+        for(int i=0;i<numberOfBeasts;i++)
+        {
+            sem_post(&beasts[i].semaphore);
+        } 
+
+        sem_post(&player1->semaphore);
+        refresh();
+        usleep(275000);
+        roundCounter++;
+
+
     }
-    sem_destroy(&beastSemaphore);
     endwin();
     return EXIT_SUCCESS;
 }

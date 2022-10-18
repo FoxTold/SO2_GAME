@@ -4,6 +4,9 @@
 
 #ifndef SERVER_PLAYER_H
 #define SERVER_PLAYER_H
+#include <semaphore.h>
+#include <ncurses.h>
+#include <stdlib.h>
 enum player_type_t
 {
     HUMAN = 0,
@@ -12,8 +15,12 @@ enum player_type_t
 
 
 struct player_t{
-    const int id;
+    int id;
+    pid_t  pid; 
 
+    enum player_type_t type;
+    char map_fragment[26];
+    int is_init;
     unsigned int x;
     unsigned int y;
 
@@ -24,6 +31,9 @@ struct player_t{
     unsigned int startY;
 
     unsigned int deaths;
-    char canMove;
+    unsigned int canMove;
+
+    sem_t semaphore;
 };
+
 #endif //SERVER_PLAYER_H
