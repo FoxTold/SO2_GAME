@@ -110,20 +110,20 @@ void generateBorders()
 }
 void drawPlayers()
 {
-    // int z = 0;
-    // for(int i=player->y-2;i<player->y+2;i++)
-    // {
-    //     for(int j=player->x-2;j<player->x+2;j++)
-    //     {
 
-            // mvaddch(i,j,player->map_fragment[z]);
-    //         z++;
-    //     }
-    // }
 
-    for(auto player : players)
+    for(auto& a : players)
     {
-        mvprintw(player->y,player->x,"%d",player->id);
+        int z = 0;
+        for(int i =a->y-2;i<=a->y+2;i++)
+        {
+            for(int j = a->x-2;j<=a->x+2;j++)
+            {
+                mvaddch(i,j,a->map_fragment[z]) ;
+                z++;
+            } 
+        }
+        mvaddch(a->y,a->x,'1');
     }
 
 }
@@ -291,15 +291,7 @@ void* playerRoutine(void* args)
                 }
 
         }
-        // int z = 0;
-        //     for(int i=player1->y-2;i<player1->y+2;i++)
-        //     {
-        //         for(int j = player1->x-2;j<player1->x+2;j++)
-        //         {
-        //             player1->map_fragment[z] = map[i*5 + j];
-        //             z++;
-        //         }
-        //     }
+
         sem_wait(&player1->semaphore);
     }
 }
@@ -463,7 +455,7 @@ int main()
     generateFooter();
     initPlayerServer();
 
-    initPlayer();
+    // initPlayer();
 
 
 
@@ -475,16 +467,28 @@ int main()
         generatePanel();
         // drawPlayers(players);
         drawBeasts();
-        drawPlayers();
         checkIfAnyOfPlayersIsDead();
         for(auto beast : beasts)
         {
             sem_post(&beast->semaphore);
         }
-        for(auto a : players)
+        for(auto& a : players)
         {
-            sem_post(&a->semaphore);
+            int z = 0;
+            for(int i =a->y-2;i<=a->y+2;i++)
+            {
+                for(int j = a->x-2;j<=a->x+2;j++)
+                {
+                    a->map_fragment[z] = (char)mvinch(i,j);
+                    z++;
+                } 
+            }
+                mvprintw(0,0,"%d",z);
+                mvprintw(1,0,"%25s",a->map_fragment);   
+                sem_post(&a->semaphore);    
         }
+        drawPlayers();
+
         refresh();
         usleep(275000);
         roundCounter++;
