@@ -7,6 +7,9 @@
 #include <semaphore.h>
 #include <ncurses.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
 enum player_type_t
 {
     HUMAN = 0,
@@ -34,6 +37,8 @@ struct player_t{
     unsigned int canMove;
 
     sem_t semaphore;
+    sem_t sem;
+
 };
 
 #endif //SERVER_PLAYER_H

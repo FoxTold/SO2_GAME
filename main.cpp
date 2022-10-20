@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <stdlib.h>
+#include "coin.h"
 #include <string>
 #include <vector>
 void* playerRoutineServer(void* args);
@@ -23,11 +24,15 @@ unsigned int roundCounter = 0;
 std::vector <beast_t*> beasts;
 std::vector <pthread_t*> threads;
 std::vector <player_t*> players;
-
+std::vector <coin_t*> coins;
+int t3 = 0;
+int t4 = 0;
  void initPlayer()
 {
     pthread_t* thread = (pthread_t*) calloc(1,sizeof(pthread_t));
     player_t* player = (player_t*)calloc(1,sizeof(player_t));
+    sem_init(&player->sem,0,1);
+
     while(1)
     {
         player->startX = rand()%64;
@@ -68,7 +73,48 @@ std::vector <player_t*> players;
         
     }
 }
+void  spawnCoin(int count)
+{
+    struct coin_t* coin = (coin_t*)calloc(1,sizeof(struct coin_t));
 
+    while(1)
+    {
+        coin->x = rand()%64;
+        coin->y = rand()%32;
+        if(mvinch(coin->x,coin->y) == ' ')
+        break;
+    }
+    coin->count = count;
+    coins.push_back(coin);
+}
+void  spawnCoinAtLocation(int y,int x,int count)
+{
+    struct coin_t* coin = (coin_t*)calloc(1,sizeof(struct coin_t));
+
+    coin->x = x;
+    coin->y = y;
+    coin->count = count;
+    coins.push_back(coin);
+}
+void drawCoins()
+{
+    for(auto& a : coins)
+    {
+        if(a->count == 10)
+        {
+            mvaddch(a->y,a->x,'t');
+        }
+        else if (a->count == 50 )
+        {
+            mvaddch(a->y,a->x,'T');
+        }
+        else
+        {
+            mvaddch(a->y,a->x,'D');
+
+        }
+    }
+}
 void drawBeasts()
 {
     for(auto beast : beasts)
@@ -76,16 +122,6 @@ void drawBeasts()
         drawBeast(beast);
     }
 }
-// void drawPlayers(struct player_t* players)
-// {
-//     for(int i=0;i<4;i++)
-//     {
-//         if ((players+i)->is_init)
-//             drawPlayer(players+i);
-//         else
-//             continue;
-//     }
-// }
 void generateBorders()
 {
     for(int i=0;i<MAP_HEIGHT;i++)
@@ -114,15 +150,6 @@ void drawPlayers()
 
     for(auto& a : players)
     {
-        int z = 0;
-        for(int i =a->y-2;i<=a->y+2;i++)
-        {
-            for(int j = a->x-2;j<=a->x+2;j++)
-            {
-                mvaddch(i,j,a->map_fragment[z]) ;
-                z++;
-            } 
-        }
         mvaddch(a->y,a->x,'1');
     }
 
@@ -221,20 +248,38 @@ void initBeast()
     pthread_create(thread,NULL,moveBeast,beast);
 
 }
-void* playerRoutine(void* args)
+void* writeData(void* args)
 {
-    struct player_t* player1 = (struct player_t* ) args;
-    int t1 = open("/home/riba/Desktop/SO2_GAME/tmp/player",O_RDONLY);
-        char ruch = 'l';
+    struct player_t* player1 = (struct player_t*)args;
 
     while(1)
     {
-        read(t1,&ruch,1);
+        sem_wait(&player1->sem);
+        write(t4,player1,sizeof(struct player_t));
+    }
+}
+void* playerRoutine(void* args)
+{
+    struct player_t* player1 = (struct player_t* ) args;
+    int t1 = open("/home/riba/Desktop/SO2_GAME/tmp/ruch",O_RDONLY);
+    t3 = t1;
+    read(t1,&player1->pid,sizeof(pid_t));
+    int t2 = open("/home/riba/Desktop/SO2_GAME/tmp/player",O_WRONLY);
+    t4 = t2;
+    write(t2,player1,sizeof(struct player_t));
+    char ruch = 'l';
+
+    pthread_t* thread  = (pthread_t*)calloc(1,sizeof(pthread_t));
+    pthread_create(thread,NULL,writeData,player1);
+    while(1)
+    {
+            read(t1,&ruch,1);
         if(player1->canMove == 0)
         {
             player1->canMove=1;
             ruch = 'l';
         }
+
         switch(ruch)
         {
             case 'w':
@@ -288,11 +333,22 @@ void* playerRoutine(void* args)
             case 'b':
                 {
                     initBeast();
+                    break;
                 }
+            case 't':
+            {
+                spawnCoin(10);
+                break;
+            }
+            case 'T':
+            {
+                spawnCoin(50);
+                break;
+            }
+                sem_wait(&player1->semaphore);
 
         }
 
-        sem_wait(&player1->semaphore);
     }
 }
 void* playerRoutineServer(void* args)
@@ -362,15 +418,7 @@ void* playerRoutineServer(void* args)
                 }
 
         }
-        // int z = 0;
-        //     for(int i=player1->y-2;i<player1->y+2;i++)
-        //     {
-        //         for(int j = player1->x-2;j<player1->x+2;j++)
-        //         {
-        //             player1->map_fragment[z] = map[i*5 + j];
-        //             z++;
-        //         }
-        //     }
+
         sem_wait(&player1->semaphore);
     }
 }
@@ -440,7 +488,36 @@ void killPlayer(struct player_t* player)
     player->x = player->startX;
     player->y = player->startY;
 }
+void checkIfPlayersKill()
+{
+    for(int i=0;i<players.size();i++)
+    {
+        for(int j=i+1;j<players.size();j++)
+        {
+            if(players[i]->x == players[j]->x && players[i]->y == players[j]->y)
+            {
 
+                spawnCoinAtLocation(players[i]->y,players[i]->x,players[i]->currentCoins + players[j]->currentCoins);
+                killPlayer(players[i]);
+                killPlayer(players[j]);
+            }
+        }
+    }
+}
+void checkIfPlayerCollectedCoin()
+{
+    for(auto&player : players)
+    for(auto&coin : coins)
+    {
+        if(coin->x == player->x && coin->y == player->y)
+        {
+            player->currentCoins += coin->count;
+            coin->count = 0;
+            coin->x = 1000;
+            coin->y=1000;
+        }
+    }
+}
 int main()
 {
     srand(time(NULL));
@@ -455,7 +532,7 @@ int main()
     generateFooter();
     initPlayerServer();
 
-    // initPlayer();
+    initPlayer();
 
 
 
@@ -465,13 +542,16 @@ int main()
         generateBorders();
         generateFooter();
         generatePanel();
-        // drawPlayers(players);
         drawBeasts();
+        drawCoins();
         checkIfAnyOfPlayersIsDead();
+        checkIfPlayersKill();
         for(auto beast : beasts)
         {
             sem_post(&beast->semaphore);
         }
+                drawPlayers();
+
         for(auto& a : players)
         {
             int z = 0;
@@ -482,15 +562,14 @@ int main()
                     a->map_fragment[z] = (char)mvinch(i,j);
                     z++;
                 } 
-            }
-                mvprintw(0,0,"%d",z);
-                mvprintw(1,0,"%25s",a->map_fragment);   
-                sem_post(&a->semaphore);    
+            }  
+            sem_post(&a->sem);
+            sem_post(&a->semaphore);  
         }
-        drawPlayers();
-
-        refresh();
+        
         usleep(275000);
+        
+        refresh();
         roundCounter++;
     }
 

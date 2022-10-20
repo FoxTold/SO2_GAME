@@ -1,6 +1,6 @@
-struct coint_t{
+struct coin_t{
     int x;
     int y;
 
     int count;
-}
+};
