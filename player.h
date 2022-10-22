@@ -20,7 +20,8 @@ enum player_type_t
 struct player_t{
     int id;
     pid_t  pid; 
-
+    int isActive;
+    
     enum player_type_t type;
     char map_fragment[26];
     int is_init;
@@ -36,6 +37,8 @@ struct player_t{
     unsigned int deaths;
     unsigned int canMove;
 
+    unsigned int round;
+    pid_t serverPid;
     sem_t semaphore;
     sem_t sem;
 

@@ -21,18 +21,24 @@
 #include <vector>
 void* playerRoutineServer(void* args);
 unsigned int roundCounter = 0;
+
+std::string ruchy[] = {"/home/riba/Desktop/SO2_GAME/tmp/ruch1","/home/riba/Desktop/SO2_GAME/tmp/ruch2","/home/riba/Desktop/SO2_GAME/tmp/ruch3","/home/riba/Desktop/SO2_GAME/tmp/ruch4"};
+std::string playersfifo[] = {"/home/riba/Desktop/SO2_GAME/tmp/player1","/home/riba/Desktop/SO2_GAME/tmp/player2","/home/riba/Desktop/SO2_GAME/tmp/player3","/home/riba/Desktop/SO2_GAME/tmp/player4"};
+
 std::vector <beast_t*> beasts;
 std::vector <pthread_t*> threads;
 std::vector <player_t*> players;
 std::vector <coin_t*> coins;
-int t3 = 0;
-int t4 = 0;
+
+int t3[4] = {0};
+int t4[4] = {0};
  void initPlayer()
 {
     pthread_t* thread = (pthread_t*) calloc(1,sizeof(pthread_t));
     player_t* player = (player_t*)calloc(1,sizeof(player_t));
     sem_init(&player->sem,0,1);
-
+    player->serverPid = getpid();
+    player->isActive = 0;
     while(1)
     {
         player->startX = rand()%64;
@@ -81,7 +87,7 @@ void  spawnCoin(int count)
     {
         coin->x = rand()%64;
         coin->y = rand()%32;
-        if(mvinch(coin->x,coin->y) == ' ')
+        if(mvinch(coin->y,coin->x) == ' ')
         break;
     }
     coin->count = count;
@@ -89,6 +95,7 @@ void  spawnCoin(int count)
 }
 void  spawnCoinAtLocation(int y,int x,int count)
 {
+    if(count == 0)return;
     struct coin_t* coin = (coin_t*)calloc(1,sizeof(struct coin_t));
 
     coin->x = x;
@@ -150,7 +157,9 @@ void drawPlayers()
 
     for(auto& a : players)
     {
-        mvaddch(a->y,a->x,'1');
+        if(!a->isActive)continue;
+        char l = a->id + '0';
+        mvaddch(a->y,a->x,l);
     }
 
 }
@@ -179,8 +188,8 @@ void generatePanel()
 
     // //printing coins info
     // mvprintw(10,MAP_WIDTH+1,"Coins");
-    // mvprintw(11,MAP_WIDTH+1 + strlen("Coins"),"carried %2d       %2d       %2d       %2d",(players+0)->currentCoins,(players+1)->currentCoins,(players+2)->currentCoins,(players+3)->currentCoins);
-    // mvprintw(12,MAP_WIDTH+1 + strlen("Coins"),"brought %2d       %2d       %2d       %2d",(players+0)->collectedCoins,(players+1)->collectedCoins,(players+2)->collectedCoins,(players+3)->collectedCoins);
+    mvprintw(11,MAP_WIDTH+1 + strlen("Coins"),"carried %2d       %2d       %2d       %2d",players[0]->currentCoins);
+    mvprintw(12,MAP_WIDTH+1 + strlen("Coins"),"brought %2d       %2d       %2d       %2d",players[0]->collectedCoins);
 
     //printing legend
     mvprintw(16,MAP_WIDTH+1,"Legend:");
@@ -255,20 +264,22 @@ void* writeData(void* args)
     while(1)
     {
         sem_wait(&player1->sem);
-        write(t4,player1,sizeof(struct player_t));
+        write(t4[player1->id],player1,sizeof(struct player_t));
     }
 }
 void* playerRoutine(void* args)
-{
+{   
     struct player_t* player1 = (struct player_t* ) args;
-    int t1 = open("/home/riba/Desktop/SO2_GAME/tmp/ruch",O_RDONLY);
-    t3 = t1;
+        // printf("%s",playersfifo[player1->id].data());
+
+    int t1 = open(ruchy[player1->id-1].data(),O_RDONLY);
+    t3[player1->id] = t1;
     read(t1,&player1->pid,sizeof(pid_t));
-    int t2 = open("/home/riba/Desktop/SO2_GAME/tmp/player",O_WRONLY);
-    t4 = t2;
+    int t2 = open(playersfifo[player1->id-1].data(),O_WRONLY);
+    t4[player1->id] = t2;
     write(t2,player1,sizeof(struct player_t));
     char ruch = 'l';
-
+    player1->isActive = 1;
     pthread_t* thread  = (pthread_t*)calloc(1,sizeof(pthread_t));
     pthread_create(thread,NULL,writeData,player1);
     while(1)
@@ -415,7 +426,18 @@ void* playerRoutineServer(void* args)
             case 'b':
                 {
                     initBeast();
+                    break;
                 }
+                case 't':
+            {
+                spawnCoin(10);
+                break;
+            }
+            case 'T':
+            {
+                spawnCoin(50);
+                break;
+            }
 
         }
 
@@ -478,6 +500,7 @@ void checkIfAnyOfPlayersIsDead()
     {
         if(beast->x == player->x && beast->y == player->y)
         {
+            spawnCoinAtLocation(player->y,player->x,player->currentCoins);
             killPlayer(player);
         }
     }
@@ -487,6 +510,7 @@ void killPlayer(struct player_t* player)
     mvprintw(0,0,"KILLED");
     player->x = player->startX;
     player->y = player->startY;
+    player->currentCoins = 0;
 }
 void checkIfPlayersKill()
 {
@@ -496,10 +520,12 @@ void checkIfPlayersKill()
         {
             if(players[i]->x == players[j]->x && players[i]->y == players[j]->y)
             {
-
+                if(players[i]->isActive && players[j]->isActive)
+                {
                 spawnCoinAtLocation(players[i]->y,players[i]->x,players[i]->currentCoins + players[j]->currentCoins);
                 killPlayer(players[i]);
                 killPlayer(players[j]);
+                }
             }
         }
     }
@@ -513,8 +539,8 @@ void checkIfPlayerCollectedCoin()
         {
             player->currentCoins += coin->count;
             coin->count = 0;
-            coin->x = 1000;
-            coin->y=1000;
+            coin->x = -1;
+            coin->y=-1;
         }
     }
 }
@@ -528,11 +554,16 @@ int main()
     init_pair(BACKGROUND,COLOR_RED,COLOR_RED);
     init_pair(PANEL,COLOR_BLACK,COLOR_YELLOW);
     generateBorders();
-    generatePanel();
     generateFooter();
-    initPlayerServer();
+    // initPlayerServer();
+        initPlayer();
+        initPlayer();
+        initPlayer();
+        initPlayer();
 
-    initPlayer();
+
+    generatePanel();
+
 
 
 
@@ -545,12 +576,13 @@ int main()
         drawBeasts();
         drawCoins();
         checkIfAnyOfPlayersIsDead();
+        checkIfPlayerCollectedCoin();
         checkIfPlayersKill();
         for(auto beast : beasts)
         {
             sem_post(&beast->semaphore);
         }
-                drawPlayers();
+        drawPlayers();
 
         for(auto& a : players)
         {
@@ -563,6 +595,7 @@ int main()
                     z++;
                 } 
             }  
+            a->round = roundCounter;
             sem_post(&a->sem);
             sem_post(&a->semaphore);  
         }
