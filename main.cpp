@@ -19,16 +19,28 @@
 #include "coin.h"
 #include <string>
 #include <vector>
+#include <signal.h>
+
+
 void* playerRoutineServer(void* args);
 unsigned int roundCounter = 0;
 
-std::string ruchy[] = {"/home/riba/Desktop/SO2_GAME/tmp/ruch1","/home/riba/Desktop/SO2_GAME/tmp/ruch2","/home/riba/Desktop/SO2_GAME/tmp/ruch3","/home/riba/Desktop/SO2_GAME/tmp/ruch4"};
-std::string playersfifo[] = {"/home/riba/Desktop/SO2_GAME/tmp/player1","/home/riba/Desktop/SO2_GAME/tmp/player2","/home/riba/Desktop/SO2_GAME/tmp/player3","/home/riba/Desktop/SO2_GAME/tmp/player4"};
+std::string ruchy[] = {"tmp/ruch1","tmp/ruch2","tmp/ruch3","tmp/ruch4"};
+std::string playersfifo[] = {"tmp/player1","tmp/player2","tmp/player3","tmp/player4"};
 
 std::vector <beast_t*> beasts;
 std::vector <pthread_t*> threads;
 std::vector <player_t*> players;
 std::vector <coin_t*> coins;
+
+void initFifos()
+{
+    for(int i = 0;i<ruchy->length();i++)
+    {
+        mkfifo(ruchy[i].data(),0777);
+        mkfifo(playersfifo[i].data(),0777);
+    }
+}
 
 int t3[4] = {0};
 int t4[4] = {0};
@@ -45,7 +57,7 @@ int t4[4] = {0};
         player->startY = rand()%32;
         if(mvinch(player->startY,player->startX)== ' ')
         {
-            player->id = players.size();
+            player->id = players.size()+1;
             player->x = player->startX;
             player->y = player->startY;
             sem_init(&player->semaphore,0,1);
@@ -147,6 +159,13 @@ void generateBorders()
                 mvaddch(i,j,'#');
                 attroff(COLOR_PAIR(PANEL));
             }
+            else if ( *(map + i*MAP_WIDTH + j)== 'A')
+            {
+                attron(COLOR_PAIR(PANEL));
+                mvaddch(i,j,'A');
+                attroff(COLOR_PAIR(PANEL));
+            }
+
         }
     }
     attroff(COLOR_PAIR(BACKGROUND));
@@ -180,16 +199,16 @@ void generatePanel()
     mvprintw(2,MAP_WIDTH+1,"Round number: %d",roundCounter);
     std::string tab[] = {"HUMAN","CPU"};
     //printing players infos
-    // mvprintw(4,MAP_WIDTH+1,"Parameter:   Player1  Player2  Player3  Player4 ");
-    // mvprintw(5,MAP_WIDTH+1,"PID         %4d     %4d     %4d     %4d",(players+0)->pid,(players+1)->pid,(players+2)->pid,(players+3)->pid);
-    // mvprintw(6,MAP_WIDTH+1,"Type         %s     %s      %s    %s",tab[(players+0)->type].data(),tab[(players+1)->type].data(),tab[(players+2)->type].data(),tab[(players+3)->type].data());
-    // mvprintw(7,MAP_WIDTH+1,"Curr X/Y    %2d/%2d    %2d/%2d    %2d/%2d    %2d/%2d",(players+0)->x,(players+0)->y,(players+1)->x,(players+1)->y,(players+2)->x,(players+2)->y,(players+3)->x,(players+3)->y);
-    // mvprintw(8,MAP_WIDTH+1,"Deaths        %d        %d        %d        %d",(players+0)->deaths,(players+1)->deaths,(players+2)->deaths,(players+3)->deaths);
+    mvprintw(4,MAP_WIDTH+1,"Parameter:   Player1  Player2  Player3  Player4 ");
+    mvprintw(5,MAP_WIDTH+1,"PID         %4d     %4d     %4d     %4d",(players[0])->pid,(players[1])->pid,(players[2])->pid,(players[3])->pid);
+    mvprintw(6,MAP_WIDTH+1,"Type         %s     %s      %s    %s",tab[(players[0])->type].data(),tab[(players[1])->type].data(),tab[(players[2])->type].data(),tab[(players[3])->type].data());
+    mvprintw(7,MAP_WIDTH+1,"Curr X/Y    %2d/%2d    %2d/%2d    %2d/%2d    %2d/%2d",(players[0])->x,(players[0])->y,(players[1])->x,(players[1])->y,(players[2])->x,(players[2])->y,(players[3])->x,(players[3])->y);
+    mvprintw(8,MAP_WIDTH+1,"Deaths        %d        %d        %d        %d",(players[0])->deaths,(players[1])->deaths,(players[2])->deaths,(players[3])->deaths);
 
     // //printing coins info
     // mvprintw(10,MAP_WIDTH+1,"Coins");
-    mvprintw(11,MAP_WIDTH+1 + strlen("Coins"),"carried %2d       %2d       %2d       %2d",players[0]->currentCoins);
-    mvprintw(12,MAP_WIDTH+1 + strlen("Coins"),"brought %2d       %2d       %2d       %2d",players[0]->collectedCoins);
+    mvprintw(11,MAP_WIDTH+1 + strlen("Coins"),"carried %2d       %2d       %2d       %2d",players[0]->currentCoins,players[1]->currentCoins,players[2]->currentCoins,players[3]->currentCoins);
+    mvprintw(12,MAP_WIDTH+1 + strlen("Coins"),"brought %2d       %2d       %2d       %2d",players[0]->collectedCoins,players[1]->collectedCoins,players[2]->collectedCoins,players[3]->collectedCoins);
 
     //printing legend
     mvprintw(16,MAP_WIDTH+1,"Legend:");
@@ -284,7 +303,7 @@ void* playerRoutine(void* args)
     pthread_create(thread,NULL,writeData,player1);
     while(1)
     {
-            read(t1,&ruch,1);
+        read(t1,&ruch,1);
         if(player1->canMove == 0)
         {
             player1->canMove=1;
@@ -293,7 +312,21 @@ void* playerRoutine(void* args)
 
         switch(ruch)
         {
+            case 'q':
+            {
+                int exit1 = 0;
+                player1->isActive = 0;
+                pthread_cancel(*thread);
+                pthread_exit(&exit1);     
+                close(t1);           
+                break;
+            }
             case 'w':
+                if(map[(player1->y-1)*MAP_WIDTH + player1->x] == 'A')
+                {
+                    player1->collectedCoins += player1->currentCoins;
+                    player1->currentCoins = 0;
+                }
                 if(map[(player1->y-1)*MAP_WIDTH + player1->x] != '^')
                 {
                 if(map[(player1->y-1)*MAP_WIDTH + player1->x] == '#')
@@ -307,6 +340,11 @@ void* playerRoutine(void* args)
 
                 
             case 's':
+                if(map[(player1->y+1)*MAP_WIDTH + player1->x] == 'A')
+                {
+                    player1->collectedCoins += player1->currentCoins;
+                    player1->currentCoins = 0;
+                }
                 if(map[(player1->y+1)*MAP_WIDTH + player1->x] != '^')
                 {
                 if(map[(player1->y+1)*MAP_WIDTH + player1->x] == '#')
@@ -320,6 +358,11 @@ void* playerRoutine(void* args)
                 break;
 
             case 'a':
+                if(map[(player1->y)*MAP_WIDTH + player1->x-1] == 'A')
+                {
+                    player1->collectedCoins += player1->currentCoins;
+                    player1->currentCoins = 0;
+                }
                 if(map[(player1->y)*MAP_WIDTH + player1->x-1] != '^')
                 {
                 if(map[(player1->y)*MAP_WIDTH + player1->x-1] == '#')
@@ -331,6 +374,11 @@ void* playerRoutine(void* args)
                 }
                 break;
             case 'd':
+                if(map[(player1->y)*MAP_WIDTH + player1->x+1] == 'A')
+                {
+                    player1->collectedCoins += player1->currentCoins;
+                    player1->currentCoins = 0;
+                }
                 if(map[(player1->y)*MAP_WIDTH + player1->x+1] != '^')
                 {
                 if(map[(player1->y)*MAP_WIDTH + player1->x+1] == '#')
@@ -449,7 +497,35 @@ void* moveBeast(void* args)
     struct beast_t* beast = (struct beast_t*)args;
     while(1)
     {
-        int move = rand() % 4;
+        int move = 0;
+        int automat = 0;
+        for(auto& player : players)
+        {
+            if((beast->x+1 == player->x ||beast->x+2 == player->x || beast->x+3 == player->x) && beast->y == player->y)
+            {
+                move =2; 
+                automat = 1;
+            }
+            if((beast->x-1 == player->x ||beast->x-2 == player->x || beast->x-3 == player->x) && beast->y == player->y)
+            {
+                move =3; 
+                automat = 1;
+            }
+            if((beast->y+1 == player->y ||beast->y+2 == player->y || beast->y+3 == player->y) && beast->x == player->x)
+            {
+                move =0; 
+                automat = 1;
+            }
+            if((beast->y-1 == player->y ||beast->y-2 == player->y || beast->y-3 == player->y) && beast->x == player->x)
+            {
+                move =1; 
+                automat = 1;
+            }
+        }
+        if(!automat)
+        {
+            move = rand()%4;
+        }
         if(move == 0)
         {
             if(map[(beast->y+1)*MAP_WIDTH + beast->x] != '^')
@@ -507,7 +583,6 @@ void checkIfAnyOfPlayersIsDead()
 }
 void killPlayer(struct player_t* player)
 {
-    mvprintw(0,0,"KILLED");
     player->x = player->startX;
     player->y = player->startY;
     player->currentCoins = 0;
@@ -533,20 +608,60 @@ void checkIfPlayersKill()
 void checkIfPlayerCollectedCoin()
 {
     for(auto&player : players)
-    for(auto&coin : coins)
     {
-        if(coin->x == player->x && coin->y == player->y)
+        for(auto&coin : coins)
         {
-            player->currentCoins += coin->count;
-            coin->count = 0;
-            coin->x = -1;
-            coin->y=-1;
+            if(coin->x == player->x && coin->y == player->y)
+            {
+                player->currentCoins += coin->count;
+                coin->count = 0;
+                coin->x = -1;
+                coin->y=-1;
+            }
         }
     }
 }
+void sig_handler(int signum){
+
+    endwin();
+    struct player_t player_exit;
+    player_exit.id = 69;
+    for(int i=0;i<4;i++)
+    {
+        // write(t3[i],&player_exit,sizeof(player_exit));
+        write(t4[i],&player_exit,sizeof(player_exit));
+        close(t3[i]);
+        close(t4[i]);
+    }
+    for(auto& x : threads)
+    {
+        pthread_cancel(*x);
+        free(x);
+    }    
+        for(auto& x : players)
+    {
+        free(x);
+    }
+    for(auto& x : beasts)
+    {
+        free(x);
+    }
+    for(auto& x : coins)
+    {
+        free(x);
+    }
+    system("rm tmp/*");
+    system("clear");
+    exit(1);
+
+
+}
 int main()
 {
+    signal(SIGINT,sig_handler);
+    signal(SIGQUIT,sig_handler);
     srand(time(NULL));
+    initFifos();
     loadMap();
     initscr();
     noecho();
@@ -569,6 +684,7 @@ int main()
 
     while(1)
     {
+
         clear();
         generateBorders();
         generateFooter();

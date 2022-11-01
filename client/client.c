@@ -11,11 +11,15 @@
 #include <pthread.h>
 #include "../common.h"
 #include "string.h"
+#include <signal.h>
+
 pthread_mutex_t mutex;
 sem_t sem;
+    pthread_t playerThread;
+
 int ruchPipe = 0;
 int playerPipe = 0;
-
+int end = 0;
 void generatePanel(struct player_t* player)
 {
     for(int i = 0;i< PANEL_HEIGHT;i++)
@@ -42,7 +46,7 @@ void generatePanel(struct player_t* player)
     // //printing coins info
     // mvprintw(10,MAP_WIDTH+1,"Coins");
     mvprintw(11,MAP_WIDTH+1 + strlen("Coins"),"carried %2d ",player->currentCoins);
-    mvprintw(12,MAP_WIDTH+1 + strlen("Coins"),"brought %2d ",player->collectedCoins);
+   mvprintw(12,MAP_WIDTH+1 + strlen("Coins"),"brought %2d ",player->collectedCoins);
 
     //printing legend
     mvprintw(16,MAP_WIDTH+1,"Legend:");
@@ -58,12 +62,14 @@ void generatePanel(struct player_t* player)
 
     attroff(COLOR_PAIR(PANEL));
 }
-
+int term = 0;
 void* playerInput(void* args)
 {
     struct player_t* player = (struct player_t*)args;
     while(1)
     {
+        if(end) pthread_exit(&end);
+        if(term == 1)return NULL;
         char ruch = getch();
         write(ruchPipe,&ruch,1);
         sem_wait(&sem);
@@ -71,13 +77,25 @@ void* playerInput(void* args)
     
 
 }
+void sig_handler(int signum){
+
+    term = 1;
+    char ruch = 'q';
+    write(ruchPipe,&ruch,1);
+    close(ruchPipe);
+    close(playerPipe);
+    end = 1;
+}
+
 int main(int argc,char** args)
 {
+    signal(SIGINT,sig_handler);
+    signal(SIGQUIT,sig_handler);
+    system("pwd");
     char* ruchP = args[1];
     char* playerP = args[2];
     sem_init(&sem,0,1);
     pthread_mutex_init(&mutex,NULL);
-    pthread_t playerThread;
     initscr();
     start_color();
     init_pair(1,COLOR_RED,COLOR_RED);
@@ -109,12 +127,22 @@ int main(int argc,char** args)
         printf("%d %d",player.x,player.y);
     }
     pthread_create(&playerThread,NULL,&playerInput,&player);
-int x = 0;
+    int x = 0;
     while(1)
     {
         clear();
+        if(end)
+        {
+            endwin();
+            return 0;
+        }
+        // clear();
         
         read(t2,&player,sizeof(struct player_t));
+        if(player.id == 69)
+        {
+            exit(1);
+        }
         generatePanel(&player);
 
         int z = 0;
@@ -136,11 +164,9 @@ int x = 0;
                 z++;
             } 
         } 
-        sem_post(&sem);
         refresh();
+        sem_post(&sem);
+
     }
-
-    pthread_join(playerThread,NULL);
-
     endwin();
 }
