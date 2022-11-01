@@ -22,6 +22,8 @@ int playerPipe = 0;
 int end = 0;
 void generatePanel(struct player_t* player)
 {
+        attron(COLOR_PAIR(PANEL));
+
     for(int i = 0;i< PANEL_HEIGHT;i++)
     {
         for(int j = MAP_WIDTH; j < MAP_WIDTH+PANEL_WIDTH;j++)
@@ -38,13 +40,13 @@ void generatePanel(struct player_t* player)
     mvprintw(6,MAP_WIDTH+1,"HUMAN");
 
         // mvprintw(4,MAP_WIDTH+1,"Parameter:   Player1  Player2  Player3  Player4 ");
-    // mvprintw(5,MAP_WIDTH+1,"PID         %4d     %4d     %4d     %4d",(players+0)->pid,(players+1)->pid,(players+2)->pid,(players+3)->pid);
-    // mvprintw(6,MAP_WIDTH+1,"Type         %s     %s      %s    %s",tab[(players+0)->type].data(),tab[(players+1)->type].data(),tab[(players+2)->type].data(),tab[(players+3)->type].data());
-    // mvprintw(7,MAP_WIDTH+1,"Curr X/Y    %2d/%2d    %2d/%2d    %2d/%2d    %2d/%2d",(players+0)->x,(players+0)->y,(players+1)->x,(players+1)->y,(players+2)->x,(players+2)->y,(players+3)->x,(players+3)->y);
-    // mvprintw(8,MAP_WIDTH+1,"Deaths        %d        %d        %d        %d",(players+0)->deaths,(players+1)->deaths,(players+2)->deaths,(players+3)->deaths);
+    mvprintw(5,MAP_WIDTH+1,"PID         %4d",player->pid);
+    mvprintw(6,MAP_WIDTH+1,"Type         %s","PLAYER");
+    mvprintw(7,MAP_WIDTH+1,"Curr X/Y    %2d/%2d",player->x,player->y);
+    mvprintw(8,MAP_WIDTH+1,"Deaths        %d ",player->deaths);
 
     // //printing coins info
-    // mvprintw(10,MAP_WIDTH+1,"Coins");
+    mvprintw(10,MAP_WIDTH+1,"Coins");
     mvprintw(11,MAP_WIDTH+1 + strlen("Coins"),"carried %2d ",player->currentCoins);
    mvprintw(12,MAP_WIDTH+1 + strlen("Coins"),"brought %2d ",player->collectedCoins);
 
@@ -72,26 +74,38 @@ void* playerInput(void* args)
         if(term == 1)return NULL;
         char ruch = getch();
         write(ruchPipe,&ruch,1);
+        if(ruch == 'q')
+        {
+            system("clear");
+            printf("Disconected from gameserver\n");
+            endwin();
+            exit(1);
+        }
         sem_wait(&sem);
     }
     
 
 }
 void sig_handler(int signum){
+    end = 1;
 
     term = 1;
     char ruch = 'q';
     write(ruchPipe,&ruch,1);
     close(ruchPipe);
     close(playerPipe);
-    end = 1;
+    system("clear");
+    printf("Disconected from gameserver\n");
+    endwin();
+    exit(1);
 }
 
 int main(int argc,char** args)
 {
     signal(SIGINT,sig_handler);
     signal(SIGQUIT,sig_handler);
-    system("pwd");
+        signal(SIGTSTP,sig_handler);
+
     char* ruchP = args[1];
     char* playerP = args[2];
     sem_init(&sem,0,1);
@@ -121,11 +135,6 @@ int main(int argc,char** args)
     struct player_t player;
     player.pid = 123;
     read(t2,&player,sizeof(struct player_t));
-    if(pid == player.pid)
-    {
-        printf("Pid dobry\n");
-        printf("%d %d",player.x,player.y);
-    }
     pthread_create(&playerThread,NULL,&playerInput,&player);
     int x = 0;
     while(1)
@@ -141,6 +150,9 @@ int main(int argc,char** args)
         read(t2,&player,sizeof(struct player_t));
         if(player.id == 69)
         {
+            endwin();
+            system("clear");
+            printf("Server OFFLINE\n");
             exit(1);
         }
         generatePanel(&player);

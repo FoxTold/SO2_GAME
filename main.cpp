@@ -33,6 +33,8 @@ std::vector <pthread_t*> threads;
 std::vector <player_t*> players;
 std::vector <coin_t*> coins;
 
+sem_t serverSem;
+
 void initFifos()
 {
     for(int i = 0;i<ruchy->length();i++)
@@ -75,8 +77,8 @@ int t4[4] = {0};
     player_t* player = (player_t*)calloc(1,sizeof(player_t));
     while(1)
     {
-        player->startX = rand()%64;
-        player->startY = rand()%32;
+        player->startX = 100;
+        player->startY = 100;
         if(mvinch(player->startY,player->startX)== ' ')
         {
             player->id = players.size();
@@ -289,8 +291,6 @@ void* writeData(void* args)
 void* playerRoutine(void* args)
 {   
     struct player_t* player1 = (struct player_t* ) args;
-        // printf("%s",playersfifo[player1->id].data());
-
     int t1 = open(ruchy[player1->id-1].data(),O_RDONLY);
     t3[player1->id] = t1;
     read(t1,&player1->pid,sizeof(pid_t));
@@ -628,7 +628,7 @@ void sig_handler(int signum){
     player_exit.id = 69;
     for(int i=0;i<4;i++)
     {
-        // write(t3[i],&player_exit,sizeof(player_exit));
+                write(t3[i],&player_exit,sizeof(player_exit));
         write(t4[i],&player_exit,sizeof(player_exit));
         close(t3[i]);
         close(t4[i]);
@@ -650,16 +650,50 @@ void sig_handler(int signum){
     {
         free(x);
     }
+    system("clear");
     system("rm tmp/*");
     system("clear");
+    printf("Server OFFLINE...\n");
+    endwin();
     exit(1);
-
-
+}
+void* serverConsole(void* args)
+{
+    while(1)
+    {
+        char command = getch();
+        switch(command)
+        {
+            case 'q':
+                sig_handler(0);
+                break;
+            case 't':
+                spawnCoin(10);
+                break;
+            case 'T':
+                spawnCoin(50);
+                break;
+            case 'b':
+                initBeast();
+                break;
+            case 'B':
+                initBeast();
+                break;
+            default:
+                break;
+        }
+        sem_wait(&serverSem);
+    }
 }
 int main()
 {
+    sem_init(&serverSem,0,1);
+    pthread_t serverThread;
+    pthread_create(&serverThread,NULL,serverConsole,NULL);
     signal(SIGINT,sig_handler);
     signal(SIGQUIT,sig_handler);
+    signal(SIGTSTP,sig_handler);
+
     srand(time(NULL));
     initFifos();
     loadMap();
@@ -670,13 +704,10 @@ int main()
     init_pair(PANEL,COLOR_BLACK,COLOR_YELLOW);
     generateBorders();
     generateFooter();
-    // initPlayerServer();
-        initPlayer();
-        initPlayer();
-        initPlayer();
-        initPlayer();
-
-
+    initPlayer();
+    initPlayer();
+    initPlayer();
+    initPlayer();
     generatePanel();
 
 
@@ -715,7 +746,7 @@ int main()
             sem_post(&a->sem);
             sem_post(&a->semaphore);  
         }
-        
+        sem_post(&serverSem);
         usleep(275000);
         
         refresh();
