@@ -301,6 +301,7 @@ void* playerRoutine(void* args)
     player1->isActive = 1;
     pthread_t* thread  = (pthread_t*)calloc(1,sizeof(pthread_t));
     pthread_create(thread,NULL,writeData,player1);
+    threads.push_back(thread);
     while(1)
     {
         read(t1,&ruch,1);
@@ -314,12 +315,14 @@ void* playerRoutine(void* args)
         {
             case 'q':
             {
-                int exit1 = 0;
                 player1->isActive = 0;
                 sem_close(&player1->sem);
                 pthread_cancel(*thread);
-                pthread_exit(&exit1);     
-                close(t1);           
+
+                close(t2);           
+
+                close(t1);
+                return NULL;
                 break;
             }
             case 'w':
@@ -406,7 +409,6 @@ void* playerRoutine(void* args)
                 break;
             }
                 sem_wait(&player1->semaphore);
-
         }
 
     }
@@ -666,7 +668,42 @@ void* serverConsole(void* args)
         switch(command)
         {
             case 'q':
-                sig_handler(0);
+                struct player_t player_exit;
+                player_exit.id = 69;
+                for(int i=0;i<=4;i++)
+                {
+                    write(t4[i],&player_exit,sizeof(player_exit));
+                    close(t4[i]);
+
+                    close(t3[i]);
+                }
+                    sleep(1);
+
+                for(auto& x : threads)
+                {
+                    pthread_cancel(*x);
+                    free(x);
+                }    
+                    for(auto& x : players)
+                {
+                    sem_close(&x->sem);
+                    free(x);
+                }
+                for(auto& x : beasts)
+                {
+                    sem_close(&x->semaphore);
+                    free(x);
+                }
+                for(auto& x : coins)
+                {
+                    free(x);
+                }
+                system("clear");
+                system("rm tmp/*");
+                system("clear");
+                printf("Server OFFLINE...\n");
+                endwin();
+                exit(1);
                 break;
             case 't':
                 spawnCoin(10);
@@ -689,9 +726,8 @@ void* serverConsole(void* args)
 int main()
 {
     sem_init(&serverSem,0,1);
-    pthread_t* serverThread= (pthread_t*)calloc(sizeof(pthread_t),1);
+    pthread_t* serverThread = (pthread_t*)calloc(1,sizeof(pthread_t));
     pthread_create(serverThread,NULL,serverConsole,NULL);
-    threads.push_back(serverThread);
     signal(SIGINT,sig_handler);
     signal(SIGQUIT,sig_handler);
     signal(SIGTSTP,sig_handler);
@@ -746,8 +782,9 @@ int main()
                 } 
             }  
             a->round = roundCounter;
-            sem_post(&a->sem);
             sem_post(&a->semaphore);  
+            sem_post(&a->sem);
+
         }
         sem_post(&serverSem);
         usleep(275000);

@@ -70,17 +70,23 @@ void* playerInput(void* args)
     struct player_t* player = (struct player_t*)args;
     while(1)
     {
-        if(end) pthread_exit(&end);
+        char ruch = 'l';
         if(term == 1)return NULL;
-        char ruch = getch();
+        write(ruchPipe,&ruch,1);
+        write(ruchPipe,&ruch,1);
+        write(ruchPipe,&ruch,1);
+        ruch = getch();
         write(ruchPipe,&ruch,1);
         if(ruch == 'q')
         {
+	    
             system("clear");
             sem_close(&sem);
             printf("Disconected from gameserver\n");
-            endwin();
-            exit(1);
+	    endwin();
+            system("clear");
+            printf("Disconected from gameserver\n");
+	    end = 1;
         }
         sem_wait(&sem);
     }
@@ -122,7 +128,7 @@ int main(int argc,char** args)
     int t1 = open(ruchP,O_WRONLY);
     if(t1 == -1)
     {
-        printf("Error");
+        printf("START SERVER FIRST....");
         exit(1);
     }
             pid_t pid = getpid();
@@ -145,7 +151,9 @@ int main(int argc,char** args)
         if(end)
         {
             endwin();
-            return 0;
+	    system("clear");
+	    pthread_cancel(playerThread);
+            exit(0);
         }
         // clear();
         
