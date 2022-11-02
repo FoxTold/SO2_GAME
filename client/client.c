@@ -77,6 +77,7 @@ void* playerInput(void* args)
         if(ruch == 'q')
         {
             system("clear");
+            sem_close(&sem);
             printf("Disconected from gameserver\n");
             endwin();
             exit(1);
@@ -104,7 +105,8 @@ int main(int argc,char** args)
 {
     signal(SIGINT,sig_handler);
     signal(SIGQUIT,sig_handler);
-        signal(SIGTSTP,sig_handler);
+    signal(SIGTSTP,sig_handler);
+    signal(0,sig_handler);
 
     char* ruchP = args[1];
     char* playerP = args[2];

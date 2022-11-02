@@ -316,6 +316,7 @@ void* playerRoutine(void* args)
             {
                 int exit1 = 0;
                 player1->isActive = 0;
+                sem_close(&player1->sem);
                 pthread_cancel(*thread);
                 pthread_exit(&exit1);     
                 close(t1);           
@@ -623,12 +624,10 @@ void checkIfPlayerCollectedCoin()
 }
 void sig_handler(int signum){
 
-    endwin();
     struct player_t player_exit;
     player_exit.id = 69;
     for(int i=0;i<4;i++)
     {
-                write(t3[i],&player_exit,sizeof(player_exit));
         write(t4[i],&player_exit,sizeof(player_exit));
         close(t3[i]);
         close(t4[i]);
@@ -640,10 +639,12 @@ void sig_handler(int signum){
     }    
         for(auto& x : players)
     {
+        sem_close(&x->sem);
         free(x);
     }
     for(auto& x : beasts)
     {
+        sem_close(&x->semaphore);
         free(x);
     }
     for(auto& x : coins)
@@ -688,11 +689,13 @@ void* serverConsole(void* args)
 int main()
 {
     sem_init(&serverSem,0,1);
-    pthread_t serverThread;
-    pthread_create(&serverThread,NULL,serverConsole,NULL);
+    pthread_t* serverThread= (pthread_t*)calloc(sizeof(pthread_t),1);
+    pthread_create(serverThread,NULL,serverConsole,NULL);
+    threads.push_back(serverThread);
     signal(SIGINT,sig_handler);
     signal(SIGQUIT,sig_handler);
     signal(SIGTSTP,sig_handler);
+    signal(0,sig_handler);
 
     srand(time(NULL));
     initFifos();
