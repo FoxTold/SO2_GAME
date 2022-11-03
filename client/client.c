@@ -79,14 +79,17 @@ void* playerInput(void* args)
         write(ruchPipe,&ruch,1);
         if(ruch == 'q')
         {
-	    
+            endwin();
+            end = 1;
+            term = 1;
+            char ruch = 'q';
+            write(ruchPipe,&ruch,1);
+            close(ruchPipe);
+            close(playerPipe);
             system("clear");
-            sem_close(&sem);
             printf("Disconected from gameserver\n");
-	    endwin();
-            system("clear");
-            printf("Disconected from gameserver\n");
-	    end = 1;
+            endwin();
+            exit(1);
         }
         sem_wait(&sem);
     }
@@ -142,7 +145,10 @@ int main(int argc,char** args)
     playerPipe = t2;
     struct player_t player;
     player.pid = 123;
+    char z = '0';
+    write(t1,&z,1);
     read(t2,&player,sizeof(struct player_t));
+    printf("%s",player.map_fragment);
     pthread_create(&playerThread,NULL,&playerInput,&player);
     int x = 0;
     while(1)
@@ -150,12 +156,11 @@ int main(int argc,char** args)
         clear();
         if(end)
         {
-            endwin();
+        endwin();
 	    system("clear");
 	    pthread_cancel(playerThread);
             exit(0);
         }
-        // clear();
         
         read(t2,&player,sizeof(struct player_t));
         if(player.id == 69)

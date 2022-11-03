@@ -285,7 +285,8 @@ void* writeData(void* args)
     while(1)
     {
         sem_wait(&player1->sem);
-        write(t4[player1->id],player1,sizeof(struct player_t));
+        if(player1->isActive)
+            write(t4[player1->id],player1,sizeof(struct player_t));
     }
 }
 void* playerRoutine(void* args)
@@ -305,6 +306,7 @@ void* playerRoutine(void* args)
     while(1)
     {
         read(t1,&ruch,1);
+        player1->isActive = 1;
         if(player1->canMove == 0)
         {
             player1->canMove=1;
@@ -316,13 +318,9 @@ void* playerRoutine(void* args)
             case 'q':
             {
                 player1->isActive = 0;
-                sem_close(&player1->sem);
-                pthread_cancel(*thread);
+                t1 = open(ruchy[player1->id-1].data(),O_RDONLY);
+                t2 = open(playersfifo[player1->id-1].data(),O_WRONLY);
 
-                close(t2);           
-
-                close(t1);
-                return NULL;
                 break;
             }
             case 'w':
@@ -628,7 +626,7 @@ void sig_handler(int signum){
 
     struct player_t player_exit;
     player_exit.id = 69;
-    for(int i=0;i<4;i++)
+    for(int i=0;i<=5;i++)
     {
         write(t4[i],&player_exit,sizeof(player_exit));
         close(t3[i]);
@@ -673,9 +671,9 @@ void* serverConsole(void* args)
                 for(int i=0;i<=4;i++)
                 {
                     write(t4[i],&player_exit,sizeof(player_exit));
-                    close(t4[i]);
+                    // close(t4[i]);
 
-                    close(t3[i]);
+                    // close(t3[i]);
                 }
                     sleep(1);
 
