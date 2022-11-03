@@ -195,22 +195,43 @@ void generatePanel()
             mvaddch(i,j,' ');
         }
     }
+    
     //printing serer and game info
     mvprintw(0,MAP_WIDTH+1,"Server's PID: %d",pid);
     mvprintw(1,MAP_WIDTH+1,"SCampsite X/Y: %d/%d",1,10);
     mvprintw(2,MAP_WIDTH+1,"Round number: %d",roundCounter);
+    mvprintw(4,MAP_WIDTH+1,"Parameter:   Player1  Player2  Player3  Player4 ");
+    mvprintw(5,MAP_WIDTH+1,"PID");
+    mvprintw(6,MAP_WIDTH+1,"TYPE");
+    mvprintw(7,MAP_WIDTH+1,"Curr X/Y");
+    mvprintw(8,MAP_WIDTH+1,"Deaths");
+    mvprintw(11,MAP_WIDTH+1,"Coins carried");
+    mvprintw(12,MAP_WIDTH+1,"Coins brought");
+
     std::string tab[] = {"HUMAN","CPU"};
     //printing players infos
-    mvprintw(4,MAP_WIDTH+1,"Parameter:   Player1  Player2  Player3  Player4 ");
-    mvprintw(5,MAP_WIDTH+1,"PID         %4d     %4d     %4d     %4d",(players[0])->pid,(players[1])->pid,(players[2])->pid,(players[3])->pid);
-    mvprintw(6,MAP_WIDTH+1,"Type         %s     %s      %s    %s",tab[(players[0])->type].data(),tab[(players[1])->type].data(),tab[(players[2])->type].data(),tab[(players[3])->type].data());
-    mvprintw(7,MAP_WIDTH+1,"Curr X/Y    %2d/%2d    %2d/%2d    %2d/%2d    %2d/%2d",(players[0])->x,(players[0])->y,(players[1])->x,(players[1])->y,(players[2])->x,(players[2])->y,(players[3])->x,(players[3])->y);
-    mvprintw(8,MAP_WIDTH+1,"Deaths        %d        %d        %d        %d",(players[0])->deaths,(players[1])->deaths,(players[2])->deaths,(players[3])->deaths);
+    for(int i=0;i<4;i++)
+    {
+        if(players[i]->isActive)
+        {
+        mvprintw(5,MAP_WIDTH+1 + strlen("PID") + 10 + i*10,"%d",players[i]->pid);
+        mvprintw(6,MAP_WIDTH+1 + strlen("TYPE") + 8 + i*10,"%s",tab[players[i]->type].data());
+        mvprintw(7,MAP_WIDTH+1 + strlen("Curr X/Y") + 4 + i*10,"%d/%d",(players[i])->x,(players[i])->y);
+        mvprintw(8,MAP_WIDTH+1 + strlen("DEATHS") + 8 + i*10,"%d",players[i]->deaths);
+        mvprintw(11,MAP_WIDTH+1 + strlen("Coins carried") + 1  + i*10,"%d",players[i]->currentCoins);
+        mvprintw(12,MAP_WIDTH+1 + strlen("Coins brought") + 1  + i*10,"%d",players[i]->collectedCoins);
+        }
+        else
+        {
+        mvprintw(5,MAP_WIDTH+1 + strlen("PID") + 10 + i*10,"-");
+        mvprintw(6,MAP_WIDTH+1 + strlen("TYPE") + 9 + i*10,"-");
+        mvprintw(7,MAP_WIDTH+1 + strlen("Curr X/Y") + 4 + i*10,"-/-");
+        mvprintw(8,MAP_WIDTH+1 + strlen("DEATHS") + 7 + i*10,"-");
+        mvprintw(11,MAP_WIDTH+1 + strlen("Coins carried") + 1  + i*10,"-");
+        mvprintw(12,MAP_WIDTH+1 + strlen("Coins brought") + 1  + i*10,"-");
+        }
 
-    // //printing coins info
-    // mvprintw(10,MAP_WIDTH+1,"Coins");
-    mvprintw(11,MAP_WIDTH+1 + strlen("Coins"),"carried %2d       %2d       %2d       %2d",players[0]->currentCoins,players[1]->currentCoins,players[2]->currentCoins,players[3]->currentCoins);
-    mvprintw(12,MAP_WIDTH+1 + strlen("Coins"),"brought %2d       %2d       %2d       %2d",players[0]->collectedCoins,players[1]->collectedCoins,players[2]->collectedCoins,players[3]->collectedCoins);
+   }
 
     //printing legend
     mvprintw(16,MAP_WIDTH+1,"Legend:");
@@ -320,7 +341,23 @@ void* playerRoutine(void* args)
                 player1->isActive = 0;
                 t1 = open(ruchy[player1->id-1].data(),O_RDONLY);
                 t2 = open(playersfifo[player1->id-1].data(),O_WRONLY);
+                int pidss=0;
+                read(t1,&pidss,4);
+                write(t2,&player1,sizeof(struct player_t));
+                player1->pid = pidss;
 
+                while(1)
+                {
+                    player1->startX = rand()%64;
+                    player1->startY = rand()%32;
+                    if(mvinch(player1->startY,player1->startX)== ' ')
+                    {
+                        player1->x = player1->startX;
+                        player1->y = player1->startY;
+                        break;
+                    }
+                    
+                }
                 break;
             }
             case 'w':
@@ -668,14 +705,13 @@ void* serverConsole(void* args)
             case 'q':
                 struct player_t player_exit;
                 player_exit.id = 69;
-                for(int i=0;i<=4;i++)
+                for(int i=0;i<=5;i++)
                 {
                     write(t4[i],&player_exit,sizeof(player_exit));
-                    // close(t4[i]);
+                    close(t4[i]);
 
-                    // close(t3[i]);
+                    close(t3[i]);
                 }
-                    sleep(1);
 
                 for(auto& x : threads)
                 {
@@ -721,6 +757,7 @@ void* serverConsole(void* args)
         sem_wait(&serverSem);
     }
 }
+
 int main()
 {
     sem_init(&serverSem,0,1);

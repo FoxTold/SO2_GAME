@@ -67,14 +67,14 @@ void generatePanel(struct player_t* player)
 int term = 0;
 void* playerInput(void* args)
 {
+    char ruch = 'l';
+    write(ruchPipe,&ruch,1);
     struct player_t* player = (struct player_t*)args;
     while(1)
     {
-        char ruch = 'l';
+        
         if(term == 1)return NULL;
-        write(ruchPipe,&ruch,1);
-        write(ruchPipe,&ruch,1);
-        write(ruchPipe,&ruch,1);
+        
         ruch = getch();
         write(ruchPipe,&ruch,1);
         if(ruch == 'q')
@@ -110,8 +110,21 @@ void sig_handler(int signum){
     exit(1);
 }
 
+int connected = 0;
+void* timer (void* args)
+{
+    sleep(3);
+    if(!connected)
+    {
+        endwin();
+        printf("Max players reached\n");
+        exit(1);
+    }
+}
+
 int main(int argc,char** args)
 {
+
     signal(SIGINT,sig_handler);
     signal(SIGQUIT,sig_handler);
     signal(SIGTSTP,sig_handler);
@@ -148,21 +161,30 @@ int main(int argc,char** args)
     char z = '0';
     write(t1,&z,1);
     read(t2,&player,sizeof(struct player_t));
-    printf("%s",player.map_fragment);
+
+    if(player.isActive == 1)
+    {
+        endwin();
+        printf("User already connected!\n");
+        return 1;
+    }
     pthread_create(&playerThread,NULL,&playerInput,&player);
-    int x = 0;
+    char* tab[] = {"","Can't connect to this client"};
     while(1)
     {
+        player.pid = getpid();
         clear();
         if(end)
         {
         endwin();
-	    system("clear");
 	    pthread_cancel(playerThread);
+        	    system("clear");
+        printf("%s\n",tab[end-1]);
             exit(0);
         }
         
         read(t2,&player,sizeof(struct player_t));
+
         if(player.id == 69)
         {
             endwin();
