@@ -42,6 +42,12 @@ struct player_t{
     sem_t semaphore;
     sem_t sem;
 
+    char ruch_fifo[21];
+    char player_fifo[21];
+
+    int fifo_read;
+    int fifo_write;
+
 };
 
 #endif //SERVER_PLAYER_H

@@ -145,6 +145,8 @@ int main(int argc,char** args)
     if(t1 == -1)
     {
         printf("START SERVER FIRST....");
+        sem_close(&sem);
+        endwin();
         exit(1);
     }
             pid_t pid = getpid();
@@ -165,6 +167,8 @@ int main(int argc,char** args)
     if(player.isActive == 1)
     {
         endwin();
+        sem_close(&sem);
+
         printf("User already connected!\n");
         return 1;
     }
@@ -178,7 +182,7 @@ int main(int argc,char** args)
         {
         endwin();
 	    pthread_cancel(playerThread);
-        	    system("clear");
+        system("clear");
         printf("%s\n",tab[end-1]);
             exit(0);
         }

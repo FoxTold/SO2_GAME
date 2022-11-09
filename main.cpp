@@ -43,9 +43,6 @@ void initFifos()
         mkfifo(playersfifo[i].data(),0777);
     }
 }
-
-int t3[4] = {0};
-int t4[4] = {0};
  void initPlayer()
 {
     pthread_t* thread = (pthread_t*) calloc(1,sizeof(pthread_t));
@@ -53,6 +50,7 @@ int t4[4] = {0};
     sem_init(&player->sem,0,1);
     player->serverPid = getpid();
     player->isActive = 0;
+
     while(1)
     {
         player->startX = rand()%64;
@@ -67,9 +65,11 @@ int t4[4] = {0};
             threads.push_back(thread);
             players.push_back(player);
             break;
-        }
-        
+        } 
     }
+    strcpy(player->ruch_fifo,ruchy[player->id-1].data());
+    strcpy(player->player_fifo,playersfifo[player->id-1].data());
+
 }
  void initPlayerServer()
 {
@@ -218,6 +218,9 @@ void generatePanel()
         mvprintw(6,MAP_WIDTH+1 + strlen("TYPE") + 8 + i*10,"%s",tab[players[i]->type].data());
         mvprintw(7,MAP_WIDTH+1 + strlen("Curr X/Y") + 4 + i*10,"%d/%d",(players[i])->x,(players[i])->y);
         mvprintw(8,MAP_WIDTH+1 + strlen("DEATHS") + 8 + i*10,"%d",players[i]->deaths);
+                mvprintw(9,MAP_WIDTH+1 + strlen("isActive") + 8 + i*10,"%d",players[i]->isActive);
+                mvprintw(10,MAP_WIDTH+1 + strlen("isActive") + 8 + i*10,"%s",players[i]->player_fifo);
+
         mvprintw(11,MAP_WIDTH+1 + strlen("Coins carried") + 1  + i*10,"%d",players[i]->currentCoins);
         mvprintw(12,MAP_WIDTH+1 + strlen("Coins brought") + 1  + i*10,"%d",players[i]->collectedCoins);
         }
@@ -227,6 +230,9 @@ void generatePanel()
         mvprintw(6,MAP_WIDTH+1 + strlen("TYPE") + 9 + i*10,"-");
         mvprintw(7,MAP_WIDTH+1 + strlen("Curr X/Y") + 4 + i*10,"-/-");
         mvprintw(8,MAP_WIDTH+1 + strlen("DEATHS") + 7 + i*10,"-");
+        mvprintw(9,MAP_WIDTH+1 + strlen("isActive") + 8 + i*10,"%d",players[i]->isActive);
+                mvprintw(10,MAP_WIDTH+1 + strlen("isActive") + 2 + i*20,"%s",players[i]->player_fifo);
+
         mvprintw(11,MAP_WIDTH+1 + strlen("Coins carried") + 1  + i*10,"-");
         mvprintw(12,MAP_WIDTH+1 + strlen("Coins brought") + 1  + i*10,"-");
         }
@@ -307,18 +313,16 @@ void* writeData(void* args)
     {
         sem_wait(&player1->sem);
         if(player1->isActive)
-            write(t4[player1->id],player1,sizeof(struct player_t));
+            write(player1->fifo_write,player1,sizeof(struct player_t));
     }
 }
 void* playerRoutine(void* args)
 {   
     struct player_t* player1 = (struct player_t* ) args;
-    int t1 = open(ruchy[player1->id-1].data(),O_RDONLY);
-    t3[player1->id] = t1;
-    read(t1,&player1->pid,sizeof(pid_t));
-    int t2 = open(playersfifo[player1->id-1].data(),O_WRONLY);
-    t4[player1->id] = t2;
-    write(t2,player1,sizeof(struct player_t));
+    player1->fifo_read = open(player1->ruch_fifo,O_RDONLY);
+    read(player1->fifo_read,&player1->pid,sizeof(pid_t));
+    player1->fifo_write = open(player1->player_fifo,O_WRONLY);
+    write(player1->fifo_write,player1,sizeof(struct player_t));
     char ruch = 'l';
     player1->isActive = 1;
     pthread_t* thread  = (pthread_t*)calloc(1,sizeof(pthread_t));
@@ -326,7 +330,7 @@ void* playerRoutine(void* args)
     threads.push_back(thread);
     while(1)
     {
-        read(t1,&ruch,1);
+        read(player1->fifo_read,&ruch,1);
         player1->isActive = 1;
         if(player1->canMove == 0)
         {
@@ -339,11 +343,12 @@ void* playerRoutine(void* args)
             case 'q':
             {
                 player1->isActive = 0;
-                t1 = open(ruchy[player1->id-1].data(),O_RDONLY);
-                t2 = open(playersfifo[player1->id-1].data(),O_WRONLY);
+                player1->fifo_read = open(ruchy[player1->id-1].data(),O_RDONLY);
+                player1->fifo_write = open(playersfifo[player1->id-1].data(),O_WRONLY);
+
                 int pidss=0;
-                read(t1,&pidss,4);
-                write(t2,&player1,sizeof(struct player_t));
+                read(player1->fifo_read,&pidss,4);
+                write(player1->fifo_write,&player1,sizeof(struct player_t));
                 player1->pid = pidss;
 
                 while(1)
@@ -663,13 +668,14 @@ void sig_handler(int signum){
 
     struct player_t player_exit;
     player_exit.id = 69;
-    for(int i=0;i<=5;i++)
+    for(int i=0;i<4;i++)
     {
-        write(t4[i],&player_exit,sizeof(player_exit));
-        close(t3[i]);
-        close(t4[i]);
+        if(players[i]->isActive)
+            write(players[i]->fifo_write,&player_exit,sizeof(player_exit));
+        close(players[i]->fifo_write);
+        close(players[i]->fifo_read);
     }
-    for(auto& x : threads)
+    for(auto x : threads)
     {
         pthread_cancel(*x);
         free(x);
@@ -679,7 +685,7 @@ void sig_handler(int signum){
         sem_close(&x->sem);
         free(x);
     }
-    for(auto& x : beasts)
+    for(auto x : beasts)
     {
         sem_close(&x->semaphore);
         free(x);
@@ -703,22 +709,19 @@ void* serverConsole(void* args)
         switch(command)
         {
             case 'q':
-                struct player_t player_exit;
-                player_exit.id = 69;
-                for(int i=0;i<=5;i++)
-                {
-                    write(t4[i],&player_exit,sizeof(player_exit));
-                    close(t4[i]);
-
-                    close(t3[i]);
-                }
-
-                for(auto& x : threads)
+                for(auto x : threads)
                 {
                     pthread_cancel(*x);
                     free(x);
-                }    
-                    for(auto& x : players)
+                }
+                struct player_t player_exit;
+                player_exit.id = 69;
+                for(int i=0;i<4;i++)
+                {
+                    if(players[i]->isActive)
+                    write(players[i]->fifo_write,&player_exit,sizeof(player_exit));
+                }
+                for(auto& x : players)
                 {
                     sem_close(&x->sem);
                     free(x);
