@@ -48,6 +48,8 @@ struct player_t{
     int fifo_read;
     int fifo_write;
 
+    int amountOfPlayers;
+
 };
 
 #endif //SERVER_PLAYER_H

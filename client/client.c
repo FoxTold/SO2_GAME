@@ -164,6 +164,14 @@ int main(int argc,char** args)
     write(t1,&z,1);
     read(t2,&player,sizeof(struct player_t));
 
+    if(player.amountOfPlayers == 4)
+    {
+        endwin();
+        sem_close(&sem);
+
+        printf("Reached max amount of players!\n");
+        return 1;
+    }
     if(player.isActive == 1)
     {
         endwin();

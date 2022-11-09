@@ -328,8 +328,17 @@ void* playerRoutine(void* args)
     pthread_t* thread  = (pthread_t*)calloc(1,sizeof(pthread_t));
     pthread_create(thread,NULL,writeData,player1);
     threads.push_back(thread);
+
     while(1)
     {
+            int amount = 0;
+
+        for(auto& a : players)
+        {
+            if(a->isActive) amount++;
+        }
+
+        player1->amountOfPlayers = amount;
         read(player1->fifo_read,&ruch,1);
         player1->isActive = 1;
         if(player1->canMove == 0)
