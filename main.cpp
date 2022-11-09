@@ -25,8 +25,8 @@
 void* playerRoutineServer(void* args);
 unsigned int roundCounter = 0;
 
-std::string ruchy[] = {"tmp/ruch1","tmp/ruch2","tmp/ruch3","tmp/ruch4"};
-std::string playersfifo[] = {"tmp/player1","tmp/player2","tmp/player3","tmp/player4"};
+std::string ruchy[] = {"tmp/ruch1\0","tmp/ruch2\0","tmp/ruch3\0","tmp/ruch4\0"};
+std::string playersfifo[] = {"tmp/player1\0","tmp/player2\0","tmp/player3\0","tmp/player4\0"};
 
 std::vector <beast_t*> beasts;
 std::vector <pthread_t*> threads;
@@ -42,6 +42,9 @@ void initFifos()
         mkfifo(ruchy[i].data(),0777);
         mkfifo(playersfifo[i].data(),0777);
     }
+    mkfifo("tmp/server1",0777);
+    mkfifo("tmp/server2",0777);
+
 }
  void initPlayer()
 {
@@ -760,7 +763,43 @@ void* serverConsole(void* args)
         sem_wait(&serverSem);
     }
 }
+void* connectPlayers(void*)
+{
 
+    while(1)
+    {
+        int serverRead = open("tmp/server1",O_RDONLY);
+        int serverWrite = open("tmp/server2",O_WRONLY);
+        int pid = 0;
+        read(serverRead,&pid,sizeof(int));
+        mvprintw(0,0,"DOSTALEM PID");
+        int found = 0;
+        for(int i=0;i<4;i++)
+        {
+                    mvprintw(0,0,"%d",players[i]->isActive);
+
+            if(players[i]->isActive == 0)
+            {
+                players[i]->pid = pid;
+                players[i]->isActive = 1;
+
+                write(serverWrite,players[i],sizeof(struct player_t));
+                close(serverRead);
+                close(serverWrite);
+                found = 1;
+                break;
+            }
+        }
+        if(!found)
+        {
+        struct player_t errorPlayer;
+        errorPlayer.pid = -1;
+        write(serverWrite,&errorPlayer,sizeof(struct player_t));
+        }
+        close(serverRead);
+        close(serverWrite);
+    }
+}
 int main()
 {
     sem_init(&serverSem,0,1);
@@ -773,10 +812,13 @@ int main()
 
     srand(time(NULL));
     initFifos();
+
     loadMap();
     initscr();
     noecho();
     start_color();
+
+    
     init_pair(BACKGROUND,COLOR_RED,COLOR_RED);
     init_pair(PANEL,COLOR_BLACK,COLOR_YELLOW);
     generateBorders();
@@ -785,6 +827,8 @@ int main()
     initPlayer();
     initPlayer();
     initPlayer();
+    pthread_t* connectThread = (pthread_t*)calloc(1,sizeof(pthread_t));
+    pthread_create(connectThread,NULL,connectPlayers,NULL);
     generatePanel();
 
 

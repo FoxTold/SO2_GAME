@@ -16,7 +16,8 @@
 pthread_mutex_t mutex;
 sem_t sem;
     pthread_t playerThread;
-
+char* ruchy[] = {"tmp/ruch1\0","tmp/ruch2\0","tmp/ruch3\0","tmp/ruch4\0"};
+char* playersfifo[] = {"tmp/player1\0","tmp/player2\0","tmp/player3\0","tmp/player4\0"};
 int ruchPipe = 0;
 int playerPipe = 0;
 int end = 0;
@@ -122,16 +123,57 @@ void* timer (void* args)
     }
 }
 
-int main(int argc,char** args)
+int main(void)
 {
+    struct player_t player;
+    pid_t pid = getpid();
 
     signal(SIGINT,sig_handler);
     signal(SIGQUIT,sig_handler);
     signal(SIGTSTP,sig_handler);
     signal(0,sig_handler);
+    int serverFifoWrite = open("tmp/server1",O_WRONLY);
+    if(serverFifoWrite<0)
+    {
+        printf("START SERVER FIRST....");
+        exit(1);
+    }
+    printf("POSZLO\n");
+    int serverFifoRead = open("tmp/server2",O_RDONLY);
+    if(serverFifoRead<0)
+    {
+        printf("START SERVER FIRST....");
+        exit(1);
+    }
+        printf("POSZLO\n");
 
-    char* ruchP = args[1];
-    char* playerP = args[2];
+    write(serverFifoWrite,&pid,sizeof(int));
+    read(serverFifoRead,&player,sizeof(struct player_t));
+    printf("POSZLO\n");
+    close(serverFifoRead);
+    close(serverFifoWrite);
+    if(player.pid == -1)
+    {
+        printf("Reached maximum amount of players...\n");
+        return 1;
+
+    }
+    printf("%s\n%s",ruchy[player.id-1],playersfifo[player.id-1]);
+    char* playerP = playersfifo[player.id-1];
+    char* ruchP = ruchy[player.id-1];
+        int t1 = open(ruchP,O_WRONLY);
+    if(t1 == -1)
+    {
+        printf("START SERVER FIRST....");
+        sem_close(&sem);
+        endwin();
+        exit(1);
+    }
+    printf("ruchP opened");
+    ruchPipe = t1;
+    int t2 = open(playerP,O_RDONLY);
+    playerPipe = t2;
+    printf("rplayer opened");
     sem_init(&sem,0,1);
     pthread_mutex_init(&mutex,NULL);
     initscr();
@@ -141,29 +183,11 @@ int main(int argc,char** args)
     cbreak();
     noecho();
 
-    int t1 = open(ruchP,O_WRONLY);
-    if(t1 == -1)
-    {
-        printf("START SERVER FIRST....");
-        sem_close(&sem);
-        endwin();
-        exit(1);
-    }
-            pid_t pid = getpid();
-    if(write(t1,&pid,sizeof(pid))==-1)
-    {
-        printf("Failed to read from fifo");
-        return 1;
-    }
-    ruchPipe = t1;
-    int t2 = open(playerP,O_RDONLY);
-    playerPipe = t2;
-    struct player_t player;
     player.pid = 123;
     char z = '0';
     write(t1,&z,1);
     read(t2,&player,sizeof(struct player_t));
-
+    printf("dziala");
     if(player.isActive == 1)
     {
         endwin();
