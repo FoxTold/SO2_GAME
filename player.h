@@ -49,7 +49,7 @@ struct player_t{
     int fifo_write;
 
     int amountOfPlayers;
-
+    int moved;
 };
 
 #endif //SERVER_PLAYER_H

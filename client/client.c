@@ -20,6 +20,9 @@ sem_t sem;
 int ruchPipe = 0;
 int playerPipe = 0;
 int end = 0;
+char* ruchy[] = {"tmp/ruch1","tmp/ruch2","tmp/ruch3","tmp/ruch4"};
+char* playersfifo[] = {"tmp/player1","tmp/player2","tmp/player3","tmp/player4"};
+
 void generatePanel(struct player_t* player)
 {
         attron(COLOR_PAIR(PANEL));
@@ -130,8 +133,7 @@ int main(int argc,char** args)
     signal(SIGTSTP,sig_handler);
     signal(0,sig_handler);
 
-    char* ruchP = args[1];
-    char* playerP = args[2];
+
     sem_init(&sem,0,1);
     pthread_mutex_init(&mutex,NULL);
     initscr();
@@ -140,46 +142,51 @@ int main(int argc,char** args)
     init_pair(2,COLOR_BLACK,COLOR_YELLOW);
     cbreak();
     noecho();
+    int t2;
+    int t1;
+    int playerFound = 0;
+        struct player_t player;
 
-    int t1 = open(ruchP,O_WRONLY);
+    for(int i=0;i<4;i++)
+    {
+    char* ruchP = ruchy[i];
+    char* playerP = playersfifo[i];
+     t1 = open(ruchP,O_WRONLY);
     if(t1 == -1)
     {
-        printf("START SERVER FIRST....");
+        printf("START SERVER FIRST....\n");
         sem_close(&sem);
         endwin();
         exit(1);
     }
             pid_t pid = getpid();
-    if(write(t1,&pid,sizeof(pid))==-1)
-    {
-        printf("Failed to read from fifo");
-        return 1;
-    }
+    write(t1,&pid,sizeof(pid))==-1;
     ruchPipe = t1;
-    int t2 = open(playerP,O_RDONLY);
+     t2 = open(playerP,O_RDONLY);
     playerPipe = t2;
-    struct player_t player;
     player.pid = 123;
     char z = '0';
     write(t1,&z,1);
     read(t2,&player,sizeof(struct player_t));
-
-    if(player.amountOfPlayers == 4)
+    if(player.isActive != 1)
     {
+        playerFound = 1;
+        break;
+    }
+    else
+    {
+        close(t1);
+        close(t2);
+    }
+    }
+    if(playerFound == 0)
+    {
+        printf("Server is full!\n");
         endwin();
         sem_close(&sem);
-
-        printf("Reached max amount of players!\n");
-        return 1;
+        exit(1);
     }
-    if(player.isActive == 1)
-    {
-        endwin();
-        sem_close(&sem);
-
-        printf("User already connected!\n");
-        return 1;
-    }
+    
     pthread_create(&playerThread,NULL,&playerInput,&player);
     char* tab[] = {"","Can't connect to this client"};
     while(1)
@@ -192,7 +199,7 @@ int main(int argc,char** args)
 	    pthread_cancel(playerThread);
         system("clear");
         printf("%s\n",tab[end-1]);
-            exit(0);
+        exit(0);
         }
         
         read(t2,&player,sizeof(struct player_t));

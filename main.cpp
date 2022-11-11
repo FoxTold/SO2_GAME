@@ -328,7 +328,6 @@ void* playerRoutine(void* args)
     pthread_t* thread  = (pthread_t*)calloc(1,sizeof(pthread_t));
     pthread_create(thread,NULL,writeData,player1);
     threads.push_back(thread);
-
     while(1)
     {
             int amount = 0;
@@ -339,7 +338,9 @@ void* playerRoutine(void* args)
         }
 
         player1->amountOfPlayers = amount;
+        player1->moved = 0;
         read(player1->fifo_read,&ruch,1);
+        
         player1->isActive = 1;
         if(player1->canMove == 0)
         {
@@ -375,6 +376,7 @@ void* playerRoutine(void* args)
                 break;
             }
             case 'w':
+                player1->moved = 1;
                 if(map[(player1->y-1)*MAP_WIDTH + player1->x] == 'A')
                 {
                     player1->collectedCoins += player1->currentCoins;
@@ -393,6 +395,7 @@ void* playerRoutine(void* args)
 
                 
             case 's':
+                player1->moved = 1;
                 if(map[(player1->y+1)*MAP_WIDTH + player1->x] == 'A')
                 {
                     player1->collectedCoins += player1->currentCoins;
@@ -411,6 +414,7 @@ void* playerRoutine(void* args)
                 break;
 
             case 'a':
+                player1->moved = 1;
                 if(map[(player1->y)*MAP_WIDTH + player1->x-1] == 'A')
                 {
                     player1->collectedCoins += player1->currentCoins;
@@ -427,6 +431,7 @@ void* playerRoutine(void* args)
                 }
                 break;
             case 'd':
+                player1->moved = 1;
                 if(map[(player1->y)*MAP_WIDTH + player1->x+1] == 'A')
                 {
                     player1->collectedCoins += player1->currentCoins;
@@ -689,7 +694,7 @@ void sig_handler(int signum){
         pthread_cancel(*x);
         free(x);
     }    
-        for(auto& x : players)
+        for(auto x : players)
     {
         sem_close(&x->sem);
         free(x);
@@ -699,7 +704,7 @@ void sig_handler(int signum){
         sem_close(&x->semaphore);
         free(x);
     }
-    for(auto& x : coins)
+    for(auto x : coins)
     {
         free(x);
     }
@@ -730,17 +735,17 @@ void* serverConsole(void* args)
                     if(players[i]->isActive)
                     write(players[i]->fifo_write,&player_exit,sizeof(player_exit));
                 }
-                for(auto& x : players)
+                for(auto x : players)
                 {
                     sem_close(&x->sem);
                     free(x);
                 }
-                for(auto& x : beasts)
+                for(auto x : beasts)
                 {
                     sem_close(&x->semaphore);
                     free(x);
                 }
-                for(auto& x : coins)
+                for(auto x : coins)
                 {
                     free(x);
                 }
@@ -829,7 +834,10 @@ int main()
                 } 
             }  
             a->round = roundCounter;
+            if(a->moved)
+            {
             sem_post(&a->semaphore);  
+            }
             sem_post(&a->sem);
 
         }
