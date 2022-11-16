@@ -129,6 +129,11 @@ void drawCoins()
         {
             mvaddch(a->y,a->x,'T');
         }
+        else if (a->count == 1 )
+        {
+            mvaddch(a->y,a->x,'c');
+
+        }
         else
         {
             mvaddch(a->y,a->x,'D');
@@ -218,8 +223,6 @@ void generatePanel()
         mvprintw(6,MAP_WIDTH+1 + strlen("TYPE") + 8 + i*10,"%s",tab[players[i]->type].data());
         mvprintw(7,MAP_WIDTH+1 + strlen("Curr X/Y") + 4 + i*10,"%d/%d",(players[i])->x,(players[i])->y);
         mvprintw(8,MAP_WIDTH+1 + strlen("DEATHS") + 8 + i*10,"%d",players[i]->deaths);
-                mvprintw(9,MAP_WIDTH+1 + strlen("isActive") + 8 + i*10,"%d",players[i]->isActive);
-                mvprintw(10,MAP_WIDTH+1 + strlen("isActive") + 8 + i*10,"%s",players[i]->player_fifo);
 
         mvprintw(11,MAP_WIDTH+1 + strlen("Coins carried") + 1  + i*10,"%d",players[i]->currentCoins);
         mvprintw(12,MAP_WIDTH+1 + strlen("Coins brought") + 1  + i*10,"%d",players[i]->collectedCoins);
@@ -230,8 +233,6 @@ void generatePanel()
         mvprintw(6,MAP_WIDTH+1 + strlen("TYPE") + 9 + i*10,"-");
         mvprintw(7,MAP_WIDTH+1 + strlen("Curr X/Y") + 4 + i*10,"-/-");
         mvprintw(8,MAP_WIDTH+1 + strlen("DEATHS") + 7 + i*10,"-");
-        mvprintw(9,MAP_WIDTH+1 + strlen("isActive") + 8 + i*10,"%d",players[i]->isActive);
-                mvprintw(10,MAP_WIDTH+1 + strlen("isActive") + 2 + i*20,"%s",players[i]->player_fifo);
 
         mvprintw(11,MAP_WIDTH+1 + strlen("Coins carried") + 1  + i*10,"-");
         mvprintw(12,MAP_WIDTH+1 + strlen("Coins brought") + 1  + i*10,"-");
@@ -761,6 +762,9 @@ void* serverConsole(void* args)
                 break;
             case 'T':
                 spawnCoin(50);
+                break;
+            case 'c':
+                spawnCoin(1);
                 break;
             case 'b':
                 initBeast();
